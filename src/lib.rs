@@ -5,8 +5,9 @@
 //! Recording is done via a thread-local buffer and dedicated file writing thread, in an attempt to
 //! mitigate overhead.
 //!
-//! Enabling the `disable` feature will disable data collection.
-//! Allowing you to roll release builds without modifying code.
+//! Disabling all features will disable data collection and replacing Profile structs with an empty
+//! function.
+//! Allowing you to roll release builds without the profiler overhead and also without modifying code.
 //!
 //! ## Features
 //!
@@ -22,7 +23,7 @@
 //! foo();
 //! ```
 //!
-#[cfg(not(feature = "disable"))]
+#[cfg(any(feature = "csv"))]
 mod profiler;
 
 pub use profiler::Profiler;
@@ -47,7 +48,7 @@ macro_rules! profile {
 }
 
 // In case profiling is disable we replace the `Profiler` struct with a unit struct.
-#[cfg(feature = "disable")]
+#[cfg(not(any(feature = "csv")))]
 mod profiler {
     pub struct Profiler;
 
