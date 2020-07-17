@@ -5,6 +5,7 @@
 //!
 use crate::Record;
 
+use anyhow::Context;
 use curl::easy::{Easy, List};
 use lazy_static::lazy_static;
 use std::cell::RefCell;
@@ -52,9 +53,12 @@ lazy_static! {
         let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
         let worker = builder
             .spawn(move || loop {
-                match receiver.recv() {
-                    Ok(rows) => send(rows.as_slice()).expect("Sending rows failed"),
-                    Err(e) => eprintln!("Failed to read payload {:?}", e),
+                if let Err(e) = receiver
+                    .recv()
+                    .with_context(|| "Failed to receive data")
+                    .and_then(|rows| send(rows.as_slice()))
+                {
+                    eprintln!("Failed to send payload to HTTP endpoint ({}): {:?}", *URL, e);
                 }
             })
             .unwrap();
