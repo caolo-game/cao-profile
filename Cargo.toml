@@ -8,6 +8,8 @@ edition = "2018"
 
 [features]
 disable=[]
+csv=[]
+default=["csv"]
 
 [dependencies]
 lazy_static = { version="1" }

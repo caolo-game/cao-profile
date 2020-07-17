@@ -1,9 +1,16 @@
-//! Records high-level profiling information to `profile.csv`.
+//! Records high-level profiling information to a CSV file.
+//! The default file path is `profile.csv`, which can be owerwritten by setting the
+//! `CAO_PROFILE_CSV` environment variable.
+//!
 //! Recording is done via a thread-local buffer and dedicated file writing thread, in an attempt to
 //! mitigate overhead.
 //!
-//! Enabling the `disable` feature will disable data collection. Allowing you to roll releases
-//! without modifying code.
+//! Enabling the `disable` feature will disable data collection.
+//! Allowing you to roll release builds without modifying code.
+//!
+//! ## Features
+//!
+//! ## Example
 //!
 //! ```
 //! use cao_profile::profile;
@@ -18,7 +25,15 @@
 #[cfg(not(feature = "disable"))]
 mod profiler;
 
-pub use profiler::*;
+pub use profiler::Profiler;
+use std::time::Duration;
+
+pub struct Record<'a> {
+    pub duration: Duration,
+    pub name: &'a str,
+    pub file: &'a str,
+    pub line: u32,
+}
 
 #[macro_export]
 macro_rules! profile {
