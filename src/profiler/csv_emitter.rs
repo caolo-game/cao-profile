@@ -32,15 +32,18 @@ fn dump_row<'a>(row: Record<'a>, file: &mut impl std::io::Write) -> Result<(), s
 lazy_static! {
     static ref COMM: Mutex<CsvEmitter> = {
         let (sender, receiver) = channel::<Vec<Record<'static>>>();
-        let worker = std::thread::spawn(move || {
-            while let Ok(rows) = receiver.recv() {
-                let mut file = PROF_FILE.lock().unwrap();
+        let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
+        let worker = builder
+            .spawn(move || {
+                while let Ok(rows) = receiver.recv() {
+                    let mut file = PROF_FILE.lock().unwrap();
 
-                for row in rows {
-                    dump_row(row, &mut *file).expect("Failed to save profiling information");
+                    for row in rows {
+                        dump_row(row, &mut *file).expect("Failed to save profiling information");
+                    }
                 }
-            }
-        });
+            })
+            .unwrap();
         let res = CsvEmitter {
             sender,
             _worker: worker,

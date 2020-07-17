@@ -1,5 +1,7 @@
 #[cfg(feature = "csv")]
 mod csv_emitter;
+#[cfg(feature = "http")]
+mod http_emitter;
 
 #[allow(unused)]
 use crate::Record;
@@ -40,6 +42,15 @@ impl Drop for Profiler {
 
         #[cfg(feature = "csv")]
         csv_emitter::LOCAL_COMM.with(|comm| {
+            comm.borrow_mut().push(Record {
+                name: self.name,
+                file: self.file,
+                line: self.line,
+                duration: dur,
+            })
+        });
+        #[cfg(feature = "http")]
+        http_emitter::LOCAL_COMM.with(|comm| {
             comm.borrow_mut().push(Record {
                 name: self.name,
                 file: self.file,

@@ -8,9 +8,10 @@
 //!
 //! ## Features
 //!
-//! | Name  | Enabled by default | Description                                                                                                                                                |
-//! | ----- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-//! | `csv` | `true`             | Logs profiling data to a CSV file. The default file path is `profile.csv`, which can be owerwritten by setting the `CAO_PROFILE_CSV` environment variable. |
+//! | Name   | Enabled by default | Description                                                                                                                                                |
+//! | ------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+//! | `csv`  | `true`             | Logs profiling data to a CSV file. The default file path is `profile.csv`, which can be owerwritten by setting the `CAO_PROFILE_CSV` environment variable. |
+//! | `http` | `false`            | Logs profiling data to a HTTP server. Set the `CAO_PROFILE_URI` environment variable.                                                                      |
 //!
 //! ## Example
 //!
@@ -65,6 +66,23 @@ mod profiler {
     impl Profiler {
         pub fn new(_file: &'static str, _line: u32, _name: &'static str) -> Self {
             Self
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate as cao_profile;
+    use crate::profile;
+
+    #[test]
+    fn smoke() {
+        fn bar() {
+            profile!("bar fn call label");
+        }
+
+        for _ in 0..1 << 17 {
+            bar();
         }
     }
 }

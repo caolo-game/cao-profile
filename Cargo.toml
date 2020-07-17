@@ -7,9 +7,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-csv=[]
-default=["csv"]
+csv = []
+http = ["curl", "serde_json", "serde", "anyhow"]
+default = ["csv"]
 
 [dependencies]
 lazy_static = { version="1" }
-serde= { version="1", optional=true, features=["derive"] }
+serde = { version="1", optional=true, features=["derive"] }
+curl = { version="0.4", optional=true }
+serde_json =  { version="1", optional=true }
+anyhow =  { version="1", optional=true }
