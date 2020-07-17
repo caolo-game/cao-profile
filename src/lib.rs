@@ -12,6 +12,7 @@
 //! | ------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 //! | `csv`  | `true`             | Logs profiling data to a CSV file. The default file path is `profile.csv`, which can be owerwritten by setting the `CAO_PROFILE_CSV` environment variable. |
 //! | `http` | `false`            | Logs profiling data to a HTTP server. Set the `CAO_PROFILE_URI` environment variable.                                                                      |
+//! | `log`  | `false`            | Logs errors using the log crate, instead of stderr.                                                                                                        |
 //!
 //! ## Example
 //!
@@ -32,7 +33,7 @@
 //! // "src/lib.rs",7,"foo fn call label",100,ns
 //! // "src/lib.rs",7,"foo fn call label",0,ns
 //! ```
-#[cfg(any(feature = "csv"))]
+#[cfg(any(feature = "csv", feature = "http"))]
 mod profiler;
 
 pub use profiler::Profiler;
@@ -58,8 +59,18 @@ macro_rules! profile {
     };
 }
 
+#[macro_export(internal_macros)]
+macro_rules! error {
+    ($($args: expr),*) => {
+        #[cfg(feature="log")]
+        log::error!($($args),*);
+        #[cfg(not(feature="log"))]
+        eprintln!($($args),*);
+    }
+}
+
 // In case profiling is disable we replace the `Profiler` struct with a unit struct.
-#[cfg(not(any(feature = "csv")))]
+#[cfg(not(any(feature = "csv", feature = "http")))]
 mod profiler {
     pub struct Profiler;
 

@@ -5,6 +5,7 @@
 //!
 use crate::Record;
 
+use crate::error;
 use anyhow::Context;
 use curl::easy::{Easy, List};
 use lazy_static::lazy_static;
@@ -58,7 +59,10 @@ lazy_static! {
                     .with_context(|| "Failed to receive data")
                     .and_then(|rows| send(rows.as_slice()))
                 {
-                    eprintln!("Failed to send payload to HTTP endpoint ({}): {:?}", *URL, e);
+                    error!(
+                        "Failed to send payload to HTTP endpoint ({}): {:?}",
+                        *URL, e
+                    );
                 }
             })
             .unwrap();
