@@ -38,6 +38,7 @@ pub use profiler::Profiler;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Record<'a> {
     pub duration: Duration,
     pub name: &'a str,

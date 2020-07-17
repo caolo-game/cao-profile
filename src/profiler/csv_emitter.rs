@@ -1,9 +1,22 @@
 use super::Record;
 
+use lazy_static::lazy_static;
 use std::cell::RefCell;
 use std::fs::File;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
+
+thread_local!(
+    pub static LOCAL_COMM: RefCell<LocalCsvEmitter> = {
+        let comm = COMM.lock().unwrap();
+        let sender = comm.get_sender();
+        let res = LocalCsvEmitter {
+            sender,
+            container: Vec::with_capacity(1 << 15),
+        };
+        RefCell::new(res)
+    };
+);
 
 fn dump_row<'a>(row: Record<'a>, file: &mut impl std::io::Write) -> Result<(), std::io::Error> {
     writeln!(
@@ -16,7 +29,7 @@ fn dump_row<'a>(row: Record<'a>, file: &mut impl std::io::Write) -> Result<(), s
     )
 }
 
-lazy_static::lazy_static! {
+lazy_static! {
     static ref COMM: Mutex<CsvEmitter> = {
         let (sender, receiver) = channel::<Vec<Record<'static>>>();
         let worker = std::thread::spawn(move || {
@@ -30,14 +43,14 @@ lazy_static::lazy_static! {
         });
         let res = CsvEmitter {
             sender,
-            _worker:worker,
+            _worker: worker,
         };
         Mutex::new(res)
     };
     static ref PROF_FILE: Mutex<File> = {
         use std::path::Path;
         let fname = std::env::var("CAO_PROFILE_CSV")
-            .or_else(|_|Ok::<_, std::convert::Infallible>("profile.csv".to_owned()))
+            .or_else(|_| Ok::<_, std::convert::Infallible>("profile.csv".to_owned()))
             .unwrap();
         let fname = Path::new(fname.as_str());
         let file = std::fs::OpenOptions::new()
@@ -50,18 +63,6 @@ lazy_static::lazy_static! {
         Mutex::new(file)
     };
 }
-
-thread_local!(
-    pub static LOCAL_COMM: RefCell<LocalCsvEmitter> = {
-        let comm = COMM.lock().unwrap();
-        let sender = comm.get_sender();
-        let res = LocalCsvEmitter {
-            sender,
-            container: Vec::with_capacity(1 << 15),
-        };
-        RefCell::new(res)
-    };
-);
 
 struct CsvEmitter {
     _worker: std::thread::JoinHandle<()>,
