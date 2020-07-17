@@ -5,24 +5,26 @@ use std::fs::File;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 
+fn dump_row<'a>(row: Record<'a>, file: &mut impl std::io::Write) -> Result<(), std::io::Error> {
+    writeln!(
+        file,
+        "{:?},{},{:?},{},ns",
+        row.file,
+        row.line,
+        row.name,
+        row.duration.as_nanos()
+    )
+}
+
 lazy_static::lazy_static! {
     static ref COMM: Mutex<CsvEmitter> = {
         let (sender, receiver) = channel::<Vec<Record<'static>>>();
         let worker = std::thread::spawn(move || {
             while let Ok(rows) = receiver.recv() {
-                use std::io::Write;
-
                 let mut file = PROF_FILE.lock().unwrap();
 
                 for row in rows {
-                    writeln!(
-                        file,
-                        "[{}::{}::{}],{},ns",
-                        row.file,
-                        row.line,
-                        row.name,
-                        row.duration.as_nanos()
-                    ).expect("Failed to save profiling information");
+                    dump_row(row, &mut *file).expect("Failed to save profiling information");
                 }
             }
         });
@@ -92,20 +94,12 @@ impl CsvEmitter {
 
 impl Drop for LocalCsvEmitter {
     fn drop(&mut self) {
-        use std::io::Write;
-
         let mut file = PROF_FILE.lock().unwrap();
 
-        for row in self.container.iter() {
-            writeln!(
-                file,
-                "[{}::{}::{}],{},ns",
-                row.file,
-                row.line,
-                row.name,
-                row.duration.as_nanos()
-            )
-            .expect("Failed to write to file");
+        let v = Vec::new();
+        let v = std::mem::replace(&mut self.container, v);
+        for row in v.into_iter() {
+            dump_row(row, &mut *file).expect("Failed to write to file");
         }
     }
 }

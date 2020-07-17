@@ -25,11 +25,11 @@
 //! foo();
 //! foo();
 //!
-//! // outputs something similar:
+//! // Outputs something similar to:
 //!
-//! // [src\lib.rs::7::foo fn call label],600,ns
-//! // [src\lib.rs::7::foo fn call label],100,ns
-//! // [src\lib.rs::7::foo fn call label],0,ns
+//! // "src/lib.rs",7,"foo fn call label",200,ns
+//! // "src/lib.rs",7,"foo fn call label",100,ns
+//! // "src/lib.rs",7,"foo fn call label",0,ns
 //! ```
 #[cfg(any(feature = "csv"))]
 mod profiler;
