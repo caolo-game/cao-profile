@@ -50,7 +50,7 @@ impl Drop for Profiler {
             })
         });
         #[cfg(feature = "http")]
-        http_emitter::LOCAL_COMM.with(|comm| {
+        http_emitter::LOCAL_EMITTER.with(|comm| {
             comm.borrow_mut().push(Record {
                 name: self.name,
                 file: self.file,

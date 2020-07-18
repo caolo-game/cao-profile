@@ -15,17 +15,15 @@ use std::mem;
 use std::sync::mpsc::{self, channel};
 use std::sync::Mutex;
 
-pub const BUFFER_SIZE: usize = 1 << 12;
-pub const LOCAL_BUFFER_SIZE: usize = 1 << 9;
+pub const BUFFER_SIZE: usize = 1 << 11;
 
-type Sender = mpsc::Sender<Vec<Record<'static>>>;
+type Sender = mpsc::Sender<Record<'static>>;
 
 thread_local!(
-    pub static LOCAL_COMM: RefCell<LocalHttpEmitter> = {
-        let comm = COMM.lock().expect("Expected to be able to lock COMM");
+    pub static LOCAL_EMITTER: RefCell<LocalHttpEmitter> = {
+        let comm = EMITTER.lock().expect("Expected to be able to lock EMITTER");
         let sender = comm.get_sender();
-        let buffer = Vec::with_capacity(LOCAL_BUFFER_SIZE);
-        let res = LocalHttpEmitter { sender, buffer };
+        let res = LocalHttpEmitter { sender };
         RefCell::new(res)
     };
 );
@@ -51,15 +49,15 @@ lazy_static! {
         std::env::var("CAO_PROFILE_URI")
             .unwrap_or_else(|_| "http://localhost:6660/push-records".to_owned())
     };
-    static ref COMM: Mutex<HttpEmitter> = {
-        let (sender, receiver) = channel::<Vec<Record<'static>>>();
+    static ref EMITTER: Mutex<HttpEmitter> = {
+        let (sender, receiver) = channel::<Record<'static>>();
         let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
         let mut container = Vec::with_capacity(BUFFER_SIZE);
         let worker = builder
             .spawn(move || loop {
                 match receiver.recv().with_context(|| "Failed to receive data") {
-                    Ok(records) => {
-                        container.extend_from_slice(records.as_slice());
+                    Ok(record) => {
+                        container.push(record);
                         if container.len() >= BUFFER_SIZE {
                             let container =
                                 mem::replace(&mut container, Vec::with_capacity(BUFFER_SIZE));
@@ -94,30 +92,18 @@ struct HttpEmitter {
 
 pub struct LocalHttpEmitter {
     sender: Sender,
-    buffer: Vec<Record<'static>>,
 }
 
 impl LocalHttpEmitter {
     pub fn push(&mut self, r: Record<'static>) {
-        self.buffer.push(r);
-        if self.buffer.len() >= LOCAL_BUFFER_SIZE {
-            let buffer = mem::replace(&mut self.buffer, Vec::with_capacity(LOCAL_BUFFER_SIZE));
             self.sender
-                .send(buffer)
+                .send(r)
                 .expect("Failed to send records for saving");
-        }
     }
 }
 
 impl HttpEmitter {
     pub fn get_sender(&self) -> Sender {
         self.sender.clone()
-    }
-}
-
-impl Drop for LocalHttpEmitter {
-    fn drop(&mut self) {
-        let v = mem::replace(&mut self.buffer, Vec::new());
-        self.sender.send(v).unwrap();
     }
 }
