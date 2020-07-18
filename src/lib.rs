@@ -60,6 +60,14 @@ macro_rules! profile {
 }
 
 #[macro_export(internal_macros)]
+macro_rules! trace {
+    ($($args: expr),*) => {
+        #[cfg(feature="log")]
+        log::trace!($($args),*);
+    }
+}
+
+#[macro_export(internal_macros)]
 macro_rules! warn {
     ($($args: expr),*) => {
         #[cfg(feature="log")]

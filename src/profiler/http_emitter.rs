@@ -5,7 +5,7 @@
 //!
 use crate::Record;
 
-use crate::{error, warn};
+use crate::{error, trace};
 use anyhow::Context;
 use curl::easy::{Easy, List};
 use lazy_static::lazy_static;
@@ -82,7 +82,7 @@ lazy_static! {
                         }
                     }
                     Err(err) => {
-                        warn!("Failed to read record {:?}", err);
+                        trace!("Failed to read record {:?}", err);
                         let container =
                             mem::replace(&mut container, Vec::with_capacity(buffer_size));
                         send_impl(container);
