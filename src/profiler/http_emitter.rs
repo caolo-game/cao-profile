@@ -16,8 +16,6 @@ use std::sync::mpsc::{self, channel};
 use std::sync::Mutex;
 use std::time::Duration;
 
-pub const BUFFER_SIZE: usize = 1 << 11;
-
 type Sender = mpsc::Sender<Record<'static>>;
 
 thread_local!(
@@ -46,14 +44,19 @@ fn send<'a>(rows: &[Record<'a>]) -> anyhow::Result<()> {
 }
 
 lazy_static! {
+    static ref BUFFER_SIZE: usize = std::env::var("CAO_PROFILE_BUFFER")
+        .unwrap_or_else(|_| "2048".to_owned())
+        .parse()
+        .unwrap();
     static ref URL: String = {
         std::env::var("CAO_PROFILE_URI")
             .unwrap_or_else(|_| "http://localhost:6660/push-records".to_owned())
     };
     static ref EMITTER: Mutex<HttpEmitter> = {
+        let buffer_size = *BUFFER_SIZE;
         let (sender, receiver) = channel::<Record<'static>>();
         let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
-        let mut container = Vec::with_capacity(BUFFER_SIZE);
+        let mut container = Vec::with_capacity(buffer_size);
         let send_impl = |container: Vec<Record>| {
             send(container.as_slice())
                 .map_err(|e| {
@@ -72,16 +75,16 @@ lazy_static! {
                 {
                     Ok(record) => {
                         container.push(record);
-                        if container.len() >= BUFFER_SIZE {
+                        if container.len() >= buffer_size {
                             let container =
-                                mem::replace(&mut container, Vec::with_capacity(BUFFER_SIZE));
+                                mem::replace(&mut container, Vec::with_capacity(buffer_size));
                             send_impl(container);
                         }
                     }
                     Err(err) => {
                         warn!("Failed to read record {:?}", err);
                         let container =
-                            mem::replace(&mut container, Vec::with_capacity(BUFFER_SIZE));
+                            mem::replace(&mut container, Vec::with_capacity(buffer_size));
                         send_impl(container);
                     }
                 }
