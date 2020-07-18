@@ -15,8 +15,8 @@ use std::mem;
 use std::sync::mpsc::{self, channel};
 use std::sync::Mutex;
 
-pub const BUFFER_SIZE: usize = 1 << 15;
-pub const LOCAL_BUFFER_SIZE: usize = 1 << 8;
+pub const BUFFER_SIZE: usize = 1 << 12;
+pub const LOCAL_BUFFER_SIZE: usize = 1 << 9;
 
 type Sender = mpsc::Sender<Vec<Record<'static>>>;
 
