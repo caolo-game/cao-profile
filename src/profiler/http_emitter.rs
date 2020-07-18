@@ -12,11 +12,11 @@ use lazy_static::lazy_static;
 use std::cell::RefCell;
 use std::io::Read;
 use std::mem;
-use std::sync::mpsc::{channel, self};
+use std::sync::mpsc::{self, channel};
 use std::sync::Mutex;
 
-pub const BUFFER_SIZE: usize = 1 << 11;
-pub const LOCAL_BUFFER_SIZE: usize = 1 << 5;
+pub const BUFFER_SIZE: usize = 1 << 15;
+pub const LOCAL_BUFFER_SIZE: usize = 1 << 8;
 
 type Sender = mpsc::Sender<Vec<Record<'static>>>;
 
@@ -61,15 +61,18 @@ lazy_static! {
                     Ok(records) => {
                         container.extend_from_slice(records.as_slice());
                         if container.len() >= BUFFER_SIZE {
-                            send(container.as_slice())
-                                .map_err(|e| {
-                                    error!(
-                                        "Failed to send payload to HTTP endpoint ({}): {:?}",
-                                        *URL, e
-                                    );
-                                })
-                                .unwrap_or_default();
-                            container.clear();
+                            let container =
+                                mem::replace(&mut container, Vec::with_capacity(BUFFER_SIZE));
+                            std::thread::spawn(move || {
+                                send(container.as_slice())
+                                    .map_err(|e| {
+                                        error!(
+                                            "Failed to send payload to HTTP endpoint ({}): {:?}",
+                                            *URL, e
+                                        );
+                                    })
+                                    .unwrap_or_default();
+                            });
                         }
                     }
                     Err(err) => {
