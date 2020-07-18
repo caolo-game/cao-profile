@@ -11,19 +11,21 @@ use curl::easy::{Easy, List};
 use lazy_static::lazy_static;
 use std::cell::RefCell;
 use std::io::Read;
-use std::sync::mpsc::{channel, Sender};
+use std::mem;
+use std::sync::mpsc::{channel, self};
 use std::sync::Mutex;
 
-const BUFFER_SIZE: usize = 1 << 12;
+pub const BUFFER_SIZE: usize = 1 << 11;
+pub const LOCAL_BUFFER_SIZE: usize = 1 << 5;
+
+type Sender = mpsc::Sender<Vec<Record<'static>>>;
 
 thread_local!(
     pub static LOCAL_COMM: RefCell<LocalHttpEmitter> = {
         let comm = COMM.lock().expect("Expected to be able to lock COMM");
         let sender = comm.get_sender();
-        let res = LocalHttpEmitter {
-            sender,
-            container: Vec::with_capacity(BUFFER_SIZE),
-        };
+        let buffer = Vec::with_capacity(LOCAL_BUFFER_SIZE);
+        let res = LocalHttpEmitter { sender, buffer };
         RefCell::new(res)
     };
 );
@@ -52,17 +54,27 @@ lazy_static! {
     static ref COMM: Mutex<HttpEmitter> = {
         let (sender, receiver) = channel::<Vec<Record<'static>>>();
         let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
+        let mut container = Vec::with_capacity(BUFFER_SIZE);
         let worker = builder
             .spawn(move || loop {
-                if let Err(e) = receiver
-                    .recv()
-                    .with_context(|| "Failed to receive data")
-                    .and_then(|rows| send(rows.as_slice()))
-                {
-                    error!(
-                        "Failed to send payload to HTTP endpoint ({}): {:?}",
-                        *URL, e
-                    );
+                match receiver.recv().with_context(|| "Failed to receive data") {
+                    Ok(records) => {
+                        container.extend_from_slice(records.as_slice());
+                        if container.len() >= BUFFER_SIZE {
+                            send(container.as_slice())
+                                .map_err(|e| {
+                                    error!(
+                                        "Failed to send payload to HTTP endpoint ({}): {:?}",
+                                        *URL, e
+                                    );
+                                })
+                                .unwrap_or_default();
+                            container.clear();
+                        }
+                    }
+                    Err(err) => {
+                        error!("Failed to read record {:?}", err);
+                    }
                 }
             })
             .unwrap();
@@ -76,37 +88,35 @@ lazy_static! {
 
 struct HttpEmitter {
     _worker: std::thread::JoinHandle<()>,
-    sender: Sender<Vec<Record<'static>>>,
+    sender: Sender,
 }
 
 pub struct LocalHttpEmitter {
-    sender: Sender<Vec<Record<'static>>>,
-    container: Vec<Record<'static>>,
+    sender: Sender,
+    buffer: Vec<Record<'static>>,
 }
 
 impl LocalHttpEmitter {
     pub fn push(&mut self, r: Record<'static>) {
-        self.container.push(r);
-        if self.container.len() >= (BUFFER_SIZE - 1) {
-            let v = Vec::with_capacity(BUFFER_SIZE);
-            let v = std::mem::replace(&mut self.container, v);
+        self.buffer.push(r);
+        if self.buffer.len() >= LOCAL_BUFFER_SIZE {
+            let buffer = mem::replace(&mut self.buffer, Vec::with_capacity(LOCAL_BUFFER_SIZE));
             self.sender
-                .send(v)
+                .send(buffer)
                 .expect("Failed to send records for saving");
         }
     }
 }
 
 impl HttpEmitter {
-    pub fn get_sender(&self) -> Sender<Vec<Record<'static>>> {
+    pub fn get_sender(&self) -> Sender {
         self.sender.clone()
     }
 }
 
 impl Drop for LocalHttpEmitter {
     fn drop(&mut self) {
-        let v = Vec::new();
-        let v = std::mem::replace(&mut self.container, v);
+        let v = mem::replace(&mut self.buffer, Vec::new());
         self.sender.send(v).unwrap();
     }
 }
