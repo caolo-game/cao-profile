@@ -63,16 +63,14 @@ lazy_static! {
                         if container.len() >= BUFFER_SIZE {
                             let container =
                                 mem::replace(&mut container, Vec::with_capacity(BUFFER_SIZE));
-                            std::thread::spawn(move || {
-                                send(container.as_slice())
-                                    .map_err(|e| {
-                                        error!(
-                                            "Failed to send payload to HTTP endpoint ({}): {:?}",
-                                            *URL, e
-                                        );
-                                    })
-                                    .unwrap_or_default();
-                            });
+                            send(container.as_slice())
+                                .map_err(|e| {
+                                    error!(
+                                        "Failed to send payload to HTTP endpoint ({}): {:?}",
+                                        *URL, e
+                                    );
+                                })
+                                .unwrap_or_default();
                         }
                     }
                     Err(err) => {
