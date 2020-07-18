@@ -5,7 +5,7 @@
 //!
 use crate::Record;
 
-use crate::error;
+use crate::{error, warn};
 use anyhow::Context;
 use curl::easy::{Easy, List};
 use lazy_static::lazy_static;
@@ -14,6 +14,7 @@ use std::io::Read;
 use std::mem;
 use std::sync::mpsc::{self, channel};
 use std::sync::Mutex;
+use std::time::Duration;
 
 pub const BUFFER_SIZE: usize = 1 << 11;
 
@@ -53,26 +54,35 @@ lazy_static! {
         let (sender, receiver) = channel::<Record<'static>>();
         let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
         let mut container = Vec::with_capacity(BUFFER_SIZE);
+        let send_impl = |container: Vec<Record>| {
+            send(container.as_slice())
+                .map_err(|e| {
+                    error!(
+                        "Failed to send payload to HTTP endpoint ({}): {:?}",
+                        *URL, e
+                    );
+                })
+                .unwrap_or_default();
+        };
         let worker = builder
             .spawn(move || loop {
-                match receiver.recv().with_context(|| "Failed to receive data") {
+                match receiver
+                    .recv_timeout(Duration::from_millis(12))
+                    .with_context(|| "Failed to receive data")
+                {
                     Ok(record) => {
                         container.push(record);
                         if container.len() >= BUFFER_SIZE {
                             let container =
                                 mem::replace(&mut container, Vec::with_capacity(BUFFER_SIZE));
-                            send(container.as_slice())
-                                .map_err(|e| {
-                                    error!(
-                                        "Failed to send payload to HTTP endpoint ({}): {:?}",
-                                        *URL, e
-                                    );
-                                })
-                                .unwrap_or_default();
+                            send_impl(container);
                         }
                     }
                     Err(err) => {
-                        error!("Failed to read record {:?}", err);
+                        warn!("Failed to read record {:?}", err);
+                        let container =
+                            mem::replace(&mut container, Vec::with_capacity(BUFFER_SIZE));
+                        send_impl(container);
                     }
                 }
             })
@@ -96,9 +106,9 @@ pub struct LocalHttpEmitter {
 
 impl LocalHttpEmitter {
     pub fn push(&mut self, r: Record<'static>) {
-            self.sender
-                .send(r)
-                .expect("Failed to send records for saving");
+        self.sender
+            .send(r)
+            .expect("Failed to send records for saving");
     }
 }
 

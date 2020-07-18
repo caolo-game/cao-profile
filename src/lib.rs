@@ -60,6 +60,16 @@ macro_rules! profile {
 }
 
 #[macro_export(internal_macros)]
+macro_rules! warn {
+    ($($args: expr),*) => {
+        #[cfg(feature="log")]
+        log::warn!($($args),*);
+        #[cfg(not(feature="log"))]
+        eprintln!($($args),*);
+    }
+}
+
+#[macro_export(internal_macros)]
 macro_rules! error {
     ($($args: expr),*) => {
         #[cfg(feature="log")]
