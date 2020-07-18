@@ -83,9 +83,11 @@ lazy_static! {
                     }
                     Err(err) => {
                         trace!("Failed to read record {:?}", err);
-                        let container =
-                            mem::replace(&mut container, Vec::with_capacity(buffer_size));
-                        send_impl(container);
+                        if !container.is_empty() {
+                            let container =
+                                mem::replace(&mut container, Vec::with_capacity(buffer_size));
+                            send_impl(container);
+                        }
                     }
                 }
             })
