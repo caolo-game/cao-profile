@@ -1,5 +1,3 @@
-#[cfg(feature = "csv")]
-mod csv_emitter;
 #[cfg(feature = "http")]
 mod http_emitter;
 
@@ -9,7 +7,6 @@ use crate::Record;
 use std::time::Instant;
 
 /// Output execution of it's scope.
-/// Output is in CSV format: name, time, timeunit
 pub struct Profiler {
     #[allow(unused)]
     start: Instant,
@@ -40,15 +37,6 @@ impl Drop for Profiler {
         let end = Instant::now();
         let dur = end - self.start;
 
-        #[cfg(feature = "csv")]
-        csv_emitter::LOCAL_COMM.with(|comm| {
-            comm.borrow_mut().push(Record {
-                name: self.name,
-                file: self.file,
-                line: self.line,
-                duration: dur,
-            })
-        });
         #[cfg(feature = "http")]
         http_emitter::LOCAL_EMITTER.with(|comm| {
             comm.borrow_mut().push(Record {

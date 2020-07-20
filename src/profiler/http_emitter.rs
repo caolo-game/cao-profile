@@ -7,16 +7,16 @@ use crate::Record;
 
 use crate::{error, trace};
 use anyhow::Context;
+use crossbeam_channel::bounded;
 use curl::easy::{Easy, List};
 use lazy_static::lazy_static;
 use std::cell::RefCell;
 use std::io::Read;
 use std::mem;
-use std::sync::mpsc::{self, sync_channel};
 use std::sync::Mutex;
 use std::time::Duration;
 
-type Sender = mpsc::SyncSender<Record<'static>>;
+type Sender = crossbeam_channel::Sender<Record<'static>>;
 
 thread_local!(
     pub static LOCAL_EMITTER: RefCell<LocalHttpEmitter> = {
@@ -54,7 +54,7 @@ lazy_static! {
     };
     static ref EMITTER: Mutex<HttpEmitter> = {
         let buffer_size = *BUFFER_SIZE;
-        let (sender, receiver) = sync_channel::<Record<'static>>(buffer_size);
+        let (sender, receiver) = bounded::<Record<'static>>(buffer_size);
         let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
         let mut container = Vec::with_capacity(buffer_size);
         let send_impl = |container: Vec<Record>| {
