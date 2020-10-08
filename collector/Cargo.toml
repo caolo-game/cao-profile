@@ -1,0 +1,24 @@
+[package]
+name = "cao-profile-collector"
+version = "0.1.0"
+authors = ["Daniel Kiss <littlesnorrboy@gmail.com>"]
+edition = "2018"
+
+[[bin]]
+name = "cao-profile-collector"
+path = "src/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default=["dotenv"]
+
+[dependencies]
+warp = "0.2"
+anyhow = "1"
+tokio = { version = "0.2", features = ["macros"], default-features=false }
+log = "0.4"
+serde= { version="1", features=["derive"] }
+sqlx = { version="0.3", features=["postgres", "chrono", "uuid", "tls"] }
+dotenv = { version="0.9", optional=true }
+chrono = { version="*", features=["serde"] }
+pretty_env_logger = "0.4"

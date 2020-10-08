@@ -10,7 +10,6 @@
 //!
 //! | Name   | Enabled by default | Description                                                                                                                                                |
 //! | ------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-//! | `csv`  | `true`             | Logs profiling data to a CSV file. The default file path is `profile.csv`, which can be owerwritten by setting the `CAO_PROFILE_CSV` environment variable. |
 //! | `http` | `false`            | Logs profiling data to a HTTP server. Set the `CAO_PROFILE_URI` environment variable.                                                                      |
 //! | `log`  | `false`            | Logs errors using the log crate, instead of stderr.                                                                                                        |
 //!
