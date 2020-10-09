@@ -1,17 +1,27 @@
 use chrono::{DateTime, Utc};
+use influxdb::InfluxDbWriteable;
+use influxdb::Query;
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgPool;
 use std::convert::Infallible;
 use std::convert::TryInto;
 use std::net::IpAddr;
 use std::time::Duration;
 use warp::Filter;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OwnedRecord {
     pub duration: Duration,
     pub name: String,
     pub file: String,
+    pub line: u32,
+}
+
+#[derive(Debug, Clone, InfluxDbWriteable)]
+pub struct InsertRecord<'a> {
+    pub time: DateTime<Utc>,
+    pub duration_ms: f64,
+    pub name: &'a str,
+    pub file: &'a str,
     pub line: u32,
 }
 
@@ -36,10 +46,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     pretty_env_logger::init();
 
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:admin@localhost:5432/caolo-profile".to_owned());
+    let db_url =
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| "http://localhost:8086".to_owned());
 
-    let db_pool = PgPool::builder().max_size(8).build(&db_url).await.unwrap();
+    let db_pool = influxdb::Client::new(db_url, "cao").with_auth("user", "admin");
 
     let host = std::env::var("HOST")
         .ok()
@@ -71,14 +81,16 @@ async fn main() -> Result<(), anyhow::Error> {
     let list_records = warp::get()
         .and(warp::path("records"))
         .and(db_pool())
-        .and_then(|db: PgPool| async move {
-            let records = sqlx::query_as!(RecordModel, " SELECT * FROM record ")
-                .fetch_all(&db)
+        .and_then(|db: influxdb::Client| async move {
+            let read_query = Query::raw_read_query("SELECT * FROM records");
+            let items = db
+                .query(&read_query)
                 .await
-                .expect("failed to get records");
-
-            let reply = warp::reply::json(&records);
-            Ok::<_, Infallible>(reply)
+                .expect("Failed to query cao-records");
+            let response = warp::http::Response::builder()
+                .header("content-type", "application/json")
+                .body(items);
+            Ok::<_, Infallible>(response)
         });
 
     let push_records = warp::post()
@@ -87,39 +99,38 @@ async fn main() -> Result<(), anyhow::Error> {
         .and(warp::body::content_length_limit(1024 * 1024))
         .and(warp::filters::body::json())
         .and(db_pool())
-        .and_then(|payload: Vec<OwnedRecord>, db: PgPool| async move {
-            tokio::spawn(async move {
-                let mut tx = db.begin().await.unwrap();
+        .and_then(
+            |payload: Vec<OwnedRecord>, db: influxdb::Client| async move {
+                tokio::spawn(async move {
+                    for row in payload {
+                        let duration: i64 = row
+                            .duration
+                            .as_nanos()
+                            .try_into()
+                            .expect("Failed to convert duration to 8 byte value");
 
-                for row in payload {
-                    let duration: i64 = row
-                        .duration
-                        .as_nanos()
-                        .try_into()
-                        .expect("Failed to convert duration to 8 byte value");
+                        let duration: f64 = duration as f64;
+                        let duration = duration / 1000.0;
 
-                    let duration: f64 = duration as f64;
-                    let duration = duration / 1000.0;
+                        let record = InsertRecord {
+                            time: Utc::now(),
+                            duration_ms: duration,
+                            file: row.file.as_str(),
+                            name: row.name.as_str(),
+                            line: row.line,
+                        };
 
-                    sqlx::query!(
-                        "CALL add_to_record($1,$2,$3,$4);",
-                        duration as f32,
-                        row.name,
-                        row.file,
-                        row.line as i32
-                    )
-                    .execute(&mut tx)
-                    .await
-                    .unwrap();
-                }
+                        let query = record.into_query("records");
 
-                tx.commit().await.unwrap();
-            });
+                        let _ = db.query(&query).await.expect("insertion failure");
+                    }
+                });
 
-            let resp = warp::reply();
-            let resp = warp::reply::with_status(resp, warp::http::StatusCode::NO_CONTENT);
-            Ok::<_, Infallible>(resp)
-        });
+                let resp = warp::reply();
+                let resp = warp::reply::with_status(resp, warp::http::StatusCode::NO_CONTENT);
+                Ok::<_, Infallible>(resp)
+            },
+        );
 
     let api = health.or(push_records).or(list_records);
     let api = api.with(warp::log("cao_profile_collector-router"));

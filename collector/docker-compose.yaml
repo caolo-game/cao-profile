@@ -1,0 +1,10 @@
+version: "3.7"
+services:
+  influx:
+    image: influxdb:1.7
+    environment:
+      INFLUXDB_DB: "cao"
+      INFLUXDB_ADMIN_USER: user
+      INFLUXDB_ADMIN_PASSWORD: admin
+    ports:
+      - "8086:8086"
