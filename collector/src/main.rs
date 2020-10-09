@@ -82,7 +82,12 @@ async fn main() -> Result<(), anyhow::Error> {
         .and(warp::path("records"))
         .and(db_pool())
         .and_then(|db: influxdb::Client| async move {
-            let read_query = Query::raw_read_query("SELECT * FROM records");
+            let read_query = Query::raw_read_query(
+                r#"
+                SELECT * FROM records
+                WHERE time > now() - 5m
+                "#,
+            );
             let items = db
                 .query(&read_query)
                 .await
@@ -110,7 +115,7 @@ async fn main() -> Result<(), anyhow::Error> {
                             .expect("Failed to convert duration to 8 byte value");
 
                         let duration: f64 = duration as f64;
-                        let duration = duration / 1000.0;
+                        let duration = duration / 1_000_000.0;
 
                         let record = InsertRecord {
                             time: Utc::now(),

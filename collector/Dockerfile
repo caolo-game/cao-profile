@@ -20,6 +20,9 @@ RUN cargo install --path . --root .
 FROM ubuntu:20.04
 WORKDIR /caolo
 
+RUN apt-get update
+RUN apt-get install libssl-dev -y
+
 COPY --from=build /caolo/bin/ ./
 
 RUN ls -al /caolo
