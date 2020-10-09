@@ -111,9 +111,9 @@ pub struct LocalHttpEmitter {
 
 impl LocalHttpEmitter {
     pub fn push(&mut self, r: Record<'static>) {
-        self.sender
-            .send(r)
-            .expect("Failed to send records for saving");
+        if let Err(err) = self.sender.send_timeout(r, Duration::from_micros(5)) {
+            trace!("Failed to push record {:?}", err);
+        }
     }
 }
 
