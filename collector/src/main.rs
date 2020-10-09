@@ -21,6 +21,7 @@ pub struct OwnedRecord {
 pub struct InsertRecord<'a> {
     pub time: DateTime<Utc>,
     pub duration_ms: f64,
+    #[tag]
     pub name: &'a str,
     pub file: &'a str,
     pub line: u32,
@@ -108,7 +109,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .and_then(
             |payload: Vec<OwnedRecord>, db: influxdb::Client| async move {
                 tokio::spawn(async move {
-                    for row in payload {
+                    for row in payload.into_iter() {
                         let duration: i64 = row
                             .duration
                             .as_nanos()
@@ -133,7 +134,6 @@ async fn main() -> Result<(), anyhow::Error> {
                         };
 
                         let query = record.into_query("records");
-
                         let _ = db.query(&query).await.expect("insertion failure");
                     }
                 });
