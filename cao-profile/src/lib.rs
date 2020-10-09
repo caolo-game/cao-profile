@@ -41,6 +41,7 @@ use std::time::Duration;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Record<'a> {
+    pub time: u128,
     pub duration: Duration,
     pub name: &'a str,
     pub file: &'a str,

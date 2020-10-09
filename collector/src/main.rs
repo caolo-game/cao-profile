@@ -3,13 +3,14 @@ use influxdb::InfluxDbWriteable;
 use influxdb::Query;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::net::IpAddr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use warp::Filter;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct OwnedRecord {
+    pub time: u128,
     pub duration: Duration,
     pub name: String,
     pub file: String,
@@ -117,8 +118,14 @@ async fn main() -> Result<(), anyhow::Error> {
                         let duration: f64 = duration as f64;
                         let duration = duration / 1_000_000.0;
 
+                        let time = SystemTime::UNIX_EPOCH
+                            + Duration::from_millis(
+                                u64::try_from(row.time)
+                                    .expect("Failed to convert time to 8 byte value"),
+                            );
+
                         let record = InsertRecord {
-                            time: Utc::now(),
+                            time: DateTime::from(time),
                             duration_ms: duration,
                             file: row.file.as_str(),
                             name: row.name.as_str(),
