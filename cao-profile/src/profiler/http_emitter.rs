@@ -3,6 +3,11 @@
 //! Note that we require our http client to work during a panic, which the `reqwest` library does
 //! not satisfy.
 //!
+//!
+//! Spawns two threads:
+//! - An aggregator thread that collects records in a buffer
+//! - And an emitter thread that will send the recorded data to a backend
+//!
 use crate::Record;
 
 use crate::{error, trace};
@@ -54,20 +59,16 @@ lazy_static! {
     };
     static ref EMITTER: Mutex<HttpEmitter> = {
         let buffer_size = *BUFFER_SIZE;
+        let (payload_sender, payload_receiver) = bounded::<Vec<Record<'static>>>(buffer_size);
         let (sender, receiver) = bounded::<Record<'static>>(buffer_size);
-        let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
+        let builder = std::thread::Builder::new().name("cao-profile http aggregator".into());
         let mut container = Vec::with_capacity(buffer_size);
-        let send_impl = |container: Vec<Record>| {
-            send(container.as_slice())
-                .map_err(|e| {
-                    error!(
-                        "Failed to send payload to HTTP endpoint ({}): {:?}",
-                        *URL, e
-                    );
-                })
-                .unwrap_or_default();
+        let send_impl = move |container: Vec<Record<'static>>| {
+            if let Err(err) = payload_sender.send(container) {
+                error!("Failed to send payload to sender thread {:?}", err);
+            }
         };
-        let worker = builder
+        let aggregator = builder
             .spawn(move || loop {
                 match receiver
                     .recv_timeout(Duration::from_millis(12))
@@ -92,16 +93,42 @@ lazy_static! {
                 }
             })
             .unwrap();
+        let builder = std::thread::Builder::new().name("cao-profile http emitter".into());
+        let emitter = builder
+            .spawn(move || loop {
+                match payload_receiver
+                    .recv()
+                    .with_context(|| "Failed to receive data")
+                {
+                    Ok(container) => {
+                        send(container.as_slice())
+                            .map_err(|e| {
+                                error!(
+                                    "Failed to send payload to HTTP endpoint ({}): {:?}",
+                                    *URL, e
+                                );
+                            })
+                            .unwrap_or_default();
+                    }
+                    Err(err) => {
+                        trace!("Failed to receive payload {:?}", err);
+                        return;
+                    }
+                }
+            })
+            .unwrap();
         let res = HttpEmitter {
             sender,
-            _worker: worker,
+            _emitter: emitter,
+            _aggregator: aggregator,
         };
         Mutex::new(res)
     };
 }
 
 struct HttpEmitter {
-    _worker: std::thread::JoinHandle<()>,
+    _aggregator: std::thread::JoinHandle<()>,
+    _emitter: std::thread::JoinHandle<()>,
     sender: Sender,
 }
 

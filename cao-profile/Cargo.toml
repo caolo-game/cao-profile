@@ -16,5 +16,5 @@ serde = { version="1", optional=true, features=["derive"] }
 curl = { version="0.4", optional=true }
 serde_json =  { version="1", optional=true }
 anyhow =  { version="1", optional=true }
-log = { version="0.4", optional=true }
+log = { version="0.4", optional=true, features=["release_max_level_info"] }
 crossbeam-channel = { version="0.4", optional=true }
